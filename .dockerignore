@@ -1,0 +1,17 @@
+# Keep the image small and the build fast: never copy the local virtualenv
+# (tens of thousands of files) or regenerable/ephemeral data into the image.
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+# Regenerated from uploads at runtime; storage is ephemeral on the Space anyway.
+chroma_db/
+chroma/
+
+# Gradio / local cruft
+.gradio/
+flagged/
+.git/
+.gitignore

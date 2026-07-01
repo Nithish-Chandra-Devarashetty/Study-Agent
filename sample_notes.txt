@@ -1,0 +1,7 @@
+Photosynthesis is the process by which green plants convert light energy into chemical energy.
+It occurs in the chloroplasts, specifically using the pigment chlorophyll. The overall reaction
+takes carbon dioxide and water and, using sunlight, produces glucose and oxygen. There are two
+main stages: the light-dependent reactions (which occur in the thylakoid membranes and produce
+ATP and NADPH) and the Calvin cycle (the light-independent reactions in the stroma, which fix
+carbon dioxide into glucose). Chlorophyll absorbs mostly red and blue light and reflects green,
+which is why plants look green.

@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Persistent vector store (regenerated from your uploads)
+chroma_db/
+
+# Gradio / temp
+.gradio/
+flagged/
