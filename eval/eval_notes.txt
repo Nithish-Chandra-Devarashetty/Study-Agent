@@ -1,0 +1,42 @@
+STUDY NOTES — BIOLOGY & PHYSICS BASICS
+(Used by evaluate.py as a fixed, known corpus so routing/groundedness scores are reproducible.)
+
+== Photosynthesis ==
+Photosynthesis is the process by which green plants convert light energy into chemical energy.
+It occurs in the chloroplasts, specifically using the pigment chlorophyll. The overall reaction
+takes carbon dioxide and water and, using sunlight, produces glucose and oxygen. There are two
+main stages: the light-dependent reactions (which occur in the thylakoid membranes and produce
+ATP and NADPH) and the Calvin cycle (the light-independent reactions in the stroma, which fix
+carbon dioxide into glucose). Chlorophyll absorbs mostly red and blue light and reflects green,
+which is why plants look green.
+
+== Cellular Respiration ==
+Cellular respiration is how cells release energy stored in glucose to make ATP, the cell's energy
+currency. It has three stages: glycolysis (in the cytoplasm, splitting glucose into two pyruvate
+molecules), the Krebs cycle (in the mitochondrial matrix), and the electron transport chain (on the
+inner mitochondrial membrane, where most ATP is produced). Aerobic respiration needs oxygen and
+yields about 36-38 ATP per glucose; without oxygen, cells fall back on fermentation, which yields
+far less. Respiration is, in a sense, the reverse of photosynthesis: it consumes oxygen and glucose
+and releases carbon dioxide and water.
+
+== Mitosis ==
+Mitosis is the division of a single cell into two genetically identical daughter cells. Its phases,
+in order, are prophase, metaphase, anaphase, and telophase, followed by cytokinesis (the splitting
+of the cytoplasm). During metaphase the chromosomes line up along the cell's equator; during
+anaphase the sister chromatids are pulled to opposite poles. Mitosis is used for growth and for
+repairing tissue. It differs from meiosis, which produces four genetically varied cells with half
+the chromosome number and is used to make gametes.
+
+== Newton's Laws of Motion ==
+Newton's first law (inertia) states that an object stays at rest, or keeps moving at constant
+velocity, unless acted on by a net external force. Newton's second law states that the net force on
+an object equals its mass times its acceleration: F = m * a. Newton's third law states that for
+every action there is an equal and opposite reaction — forces always come in pairs. These three laws
+form the foundation of classical mechanics.
+
+== The Water Cycle ==
+The water cycle describes how water moves around the Earth. Evaporation turns liquid water into
+vapour using energy from the Sun; transpiration adds vapour released by plants. That vapour rises,
+cools, and undergoes condensation to form clouds. Precipitation (rain, snow, sleet, or hail) then
+returns water to the surface, where collection gathers it into rivers, lakes, and oceans, and the
+cycle repeats.

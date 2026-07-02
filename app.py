@@ -138,7 +138,8 @@ def agent_respond(history):
 
     except Exception as exc:
         final_answer = (f"Something went wrong talking to the model: `{exc}`\n\n"
-                        "Check that Ollama is running and the models are pulled.")
+                        "Check that your `OPENROUTER_API_KEY` is set and the chosen "
+                        "`LLM_MODEL` is available (free models can be rate-limited).")
 
     if not final_answer:
         final_answer = "I couldn't produce an answer this time — please try rephrasing."

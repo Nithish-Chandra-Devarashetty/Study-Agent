@@ -16,7 +16,9 @@ concepts — grounded in *your own* study notes. The LLM runs on
 your machine (no embedding API needed).
 
 The key idea: this is an **agent, not a fixed RAG chain**. The LLM decides
-*which tool* to call for each message, and the UI shows you that decision live.
+*which tool* to call for each message — including a real judgment call between
+**"answer from the notes"** and **"the notes don't cover this, go search the
+web"** — and the UI shows you that decision live.
 
 ---
 
@@ -26,43 +28,57 @@ The key idea: this is an **agent, not a fixed RAG chain**. The LLM decides
 you ──▶ Gradio UI (app.py)
              │  your message
              ▼
-     Tool-calling agent (agent.py)  ◀── OpenRouter LLM routes to ONE tool
+     Tool-calling agent (agent.py)  ◀── OpenRouter LLM routes to a tool
              │
-   ┌─────────┼──────────────┐
-   ▼         ▼              ▼
-answer_    make_quiz    explain_
-from_notes             concept
-   │         │              │
-   └────── retrieve() ──────┘        (each tool does its own RAG)
-             │
-             ▼
-     Chroma vector store (ingest.py)  ◀── local sentence-transformers embeddings
+   ┌─────────┼───────────┬──────────────┐
+   ▼         ▼           ▼               ▼
+answer_    make_quiz  explain_       search_web
+from_notes            concept        (FALLBACK)
+   │         │           │               │
+   └────── retrieve() ───┘          DuckDuckGo (no key)
+             │                           │
+             ▼                           ▼
+     Chroma vector store          the public web
+     (local ST embeddings)
              │
              ▼
      your uploaded .pdf / .txt notes
 ```
 
+**The agentic decision.** `answer_from_notes` is always tried first. If retrieval
+comes back empty it returns a `NOTES_MISS` signal; the agent then *decides*
+whether to fall back to `search_web` (for general-knowledge questions) or to tell
+you honestly that it isn't in your notes. Web-sourced answers are clearly
+labelled as **not** grounded in your notes. Set `ENABLE_WEB_SEARCH=0` to drop the
+tool entirely and keep the agent strictly notes-only.
+
 **Why two different backends?** OpenRouter is a chat-completions service — it has
 no embeddings endpoint. So the LLM comes from OpenRouter, while embeddings run
 in-process with a small `sentence-transformers` model (free, no server, no key).
 
-### The three tools
+### The four tools
 | Tool | When the agent uses it | What it returns |
 |------|------------------------|-----------------|
 | `answer_from_notes` | factual questions ("What is X?") | grounded answer + source snippet |
 | `make_quiz` | "quiz me on…", "test me" | N mixed MCQ + short-answer questions **with an answer key** |
 | `explain_concept` | "explain… simply", confusion | plain-language explanation + one analogy |
+| `search_web` | **fallback** — only after the notes miss, for general knowledge | web answer, clearly labelled *not from your notes* + source URL |
 
-Each tool retrieves the top-k relevant chunks from Chroma and generates its
+The first three retrieve the top-k relevant chunks from Chroma and generate their
 answer **only** from those chunks, so responses stay grounded in your notes.
+`search_web` is the one door out of the notes, taken only when the agent decides
+they don't cover the question (uses DuckDuckGo — free, no API key).
 
 ### Files
 | File | Role |
 |------|------|
-| `config.py` | all settings: model names, OpenRouter key/URL, paths, `k`, chunk size |
+| `config.py` | all settings: model names, OpenRouter key/URL, paths, `k`, chunk size, web-search toggle |
 | `ingest.py` | load → split → embed (local) → persist Chroma; retrieval & de-dup |
-| `agent.py` | the three tools + the tool-calling agent loop (OpenRouter LLM) |
+| `websearch.py` | DuckDuckGo web-search helper for the `search_web` fallback tool |
+| `agent.py` | the four tools + the tool-calling agent loop (OpenRouter LLM) |
 | `app.py` | Gradio UI (upload, chat, live agent-step display) |
+| `evaluate.py` | routing-accuracy + answer-groundedness evaluation harness |
+| `eval/` | fixed notes corpus + labelled test set the evaluation runs against |
 
 ---
 
@@ -112,6 +128,8 @@ Open the local URL it prints (usually `http://127.0.0.1:7860`).
    - *"What is mitosis?"* → routes to `answer_from_notes`
    - *"Quiz me on the water cycle"* → routes to `make_quiz`
    - *"Explain entropy simply"* → routes to `explain_concept`
+   - *"What's the capital of Australia?"* (not in your notes) → the agent tries
+     the notes, sees a miss, and falls back to `search_web`
 3. Watch the **🛠 Agent steps & sources** panel to see which tool the agent
    chose and the source snippet it grounded on.
 
@@ -120,11 +138,80 @@ new file **adds** to the collection. Use **🧹 Clear all notes** to start fresh
 
 ---
 
+## Evaluation
+
+A RAG *agent* has two things worth measuring, so there's a small, reproducible
+harness for exactly those:
+
+1. **Routing accuracy** — for each message, did the agent pick the *right* tool?
+   This includes the hard case: did it fall back to `search_web` when (and only
+   when) the notes don't contain the answer?
+2. **Answer groundedness** — did the answer stay supported by the retrieved
+   notes instead of drifting into invented facts? Graded by an **LLM-as-judge**
+   that only ever sees the retrieved notes, the question, and the answer, and
+   returns one label (`GROUNDED` / `PARTIAL` / `UNSUPPORTED` / `REFUSED`).
+
+It runs against a **fixed corpus** (`eval/eval_notes.txt`) and an **18-case
+labelled test set** (`eval/eval_set.json`) — 8 factual, 3 quiz, 3 explain, and 4
+deliberately out-of-notes questions — so scores are reproducible run to run. The
+eval ingests into a throwaway vector store, so your real `./chroma_db` is left
+untouched.
+
+```bash
+python evaluate.py                 # full run → prints metrics, writes eval/results.md
+python evaluate.py --no-judge      # routing only (skips the LLM judge calls)
+python evaluate.py --limit 6       # quick smoke test on the first 6 cases
+```
+
+The report breaks down three numbers: **routing accuracy** (all cases),
+**groundedness** (in-notes cases), and **honest web fallback** (out-of-notes
+cases went to the web or refused — never fabricated a notes-based answer). A
+per-case table lands in `eval/results.md`.
+
+---
+
+## Metrics & limitations
+
+**What works well**
+- **Routing is the strong point.** With intent-heavy phrasings ("quiz me…",
+  "explain… simply") the tool descriptions + system prompt route reliably, and
+  the notes-first → web-fallback decision behaves as designed.
+- **Grounding holds** for in-notes questions: each tool answers only from
+  retrieved chunks and cites the source snippet, so the judge rarely flags
+  hallucination when the material is actually present.
+- **Honest failure.** When the notes don't cover something, the agent says so or
+  goes to the web and labels the result — it doesn't quietly make things up.
+
+**What doesn't (known limitations)**
+- **Retrieval is plain top-k cosine** over `all-MiniLM-L6-v2` (384-dim). Fine for
+  clean prose; it can miss paraphrased or multi-hop questions, and there's no
+  re-ranking or query rewriting.
+- **Free-tier LLM variance.** Small/free OpenRouter models occasionally emit a
+  malformed tool call or over-eagerly reach for `search_web`. `handle_parsing_errors`
+  and argument-coercion validators soften this, but routing isn't 100%.
+- **Web fallback is best-effort.** DuckDuckGo results can be thin or rate-limited;
+  the tool summarises only snippets (it doesn't fetch full pages).
+- **Groundedness is judged by an LLM**, not humans — a reasonable proxy, but the
+  judge itself can be wrong on borderline cases.
+- **Ephemeral storage on HF Spaces** — the vector store resets on restart; re-ingest
+  after a restart.
+
+**What I'd do next**
+- Add a **retrieval-quality** metric (hit@k against gold chunk IDs) so answer
+  errors can be attributed to retrieval vs. generation.
+- **Hybrid retrieval** (BM25 + dense) and a cross-encoder re-ranker for recall.
+- **Confidence-gated web fallback** driven by a retrieval-score threshold rather
+  than an empty-result check, plus full-page fetch + citation of web sources.
+- Grow the eval set and add **inter-rater checks** on the LLM judge (multiple
+  judges / a small human-labelled slice) to calibrate the groundedness number.
+
+---
+
 ## Choosing a model
 Set `LLM_MODEL` (env var or `.env`) to any **tool-calling-capable** OpenRouter
 model. This is a tool-calling agent, so the model *must* support function calling.
-Good free options:
-- `meta-llama/llama-3.3-70b-instruct:free` (default)
+The default is `poolside/laguna-m.1`; other good free options:
+- `meta-llama/llama-3.3-70b-instruct:free`
 - `qwen/qwen-2.5-72b-instruct:free`
 - `mistralai/mistral-small-3.1-24b-instruct:free`
 
@@ -136,8 +223,10 @@ in another. See the current list at <https://openrouter.ai/models?max_price=0>.
 ## Error handling
 - **Missing API key** → the app detects it and tells you to set
   `OPENROUTER_API_KEY`, instead of crashing.
-- **No notes uploaded / nothing relevant found** → tools answer honestly rather
-  than making things up.
+- **No notes uploaded / nothing relevant found** → the agent either falls back to
+  a web search (labelled as such) or answers honestly rather than making things up.
+- **Web search unavailable** (offline / rate-limited) → `search_web` returns an
+  honest "couldn't reach the web" instead of crashing the agent loop.
 - **Bad / unreadable upload** → reported per-file in the ingestion status box.
 
 ---
@@ -176,9 +265,11 @@ time — so the container just runs the Gradio app.
 ## Config knobs (`config.py`)
 | Setting | Default | Meaning |
 |---------|---------|---------|
-| `LLM_MODEL` | `meta-llama/llama-3.3-70b-instruct:free` | OpenRouter reasoning + generation model (must support tools) |
+| `LLM_MODEL` | `poolside/laguna-m.1` | OpenRouter reasoning + generation model (must support tools) |
 | `OPENROUTER_API_KEY` | *(required)* | your OpenRouter key |
 | `EMBED_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | local embedding model |
+| `ENABLE_WEB_SEARCH` | `1` | offer the `search_web` fallback tool (`0` = notes-only) |
+| `WEB_SEARCH_RESULTS` | `4` | web results summarised per fallback search |
 | `TOP_K` | `4` | chunks retrieved per query |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1000` / `150` | splitter settings |
 | `CHROMA_DIR` | `./chroma_db` | where the vector store persists |

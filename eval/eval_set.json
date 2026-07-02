@@ -1,0 +1,23 @@
+[
+  {"id":  1, "question": "What is photosynthesis?", "expected_tool": "answer_from_notes", "in_notes": true},
+  {"id":  2, "question": "Where does the Calvin cycle take place?", "expected_tool": "answer_from_notes", "in_notes": true},
+  {"id":  3, "question": "How many ATP does aerobic respiration yield per glucose?", "expected_tool": "answer_from_notes", "in_notes": true},
+  {"id":  4, "question": "List the phases of mitosis in order.", "expected_tool": "answer_from_notes", "in_notes": true},
+  {"id":  5, "question": "What does Newton's second law state?", "expected_tool": "answer_from_notes", "in_notes": true},
+  {"id":  6, "question": "What happens during condensation in the water cycle?", "expected_tool": "answer_from_notes", "in_notes": true},
+  {"id":  7, "question": "Why do plants look green?", "expected_tool": "answer_from_notes", "in_notes": true},
+  {"id":  8, "question": "What are the three stages of cellular respiration?", "expected_tool": "answer_from_notes", "in_notes": true},
+
+  {"id":  9, "question": "Quiz me on the water cycle", "expected_tool": "make_quiz", "in_notes": true},
+  {"id": 10, "question": "Test me with 3 questions about mitosis", "expected_tool": "make_quiz", "in_notes": true},
+  {"id": 11, "question": "Give me some practice questions on photosynthesis", "expected_tool": "make_quiz", "in_notes": true},
+
+  {"id": 12, "question": "Explain cellular respiration simply", "expected_tool": "explain_concept", "in_notes": true},
+  {"id": 13, "question": "I don't get Newton's third law, explain it like I'm five", "expected_tool": "explain_concept", "in_notes": true},
+  {"id": 14, "question": "Explain the water cycle with an everyday analogy", "expected_tool": "explain_concept", "in_notes": true},
+
+  {"id": 15, "question": "What is the capital of Australia?", "expected_tool": "search_web", "in_notes": false},
+  {"id": 16, "question": "Who wrote the play Hamlet?", "expected_tool": "search_web", "in_notes": false},
+  {"id": 17, "question": "In what year was the first iPhone released?", "expected_tool": "search_web", "in_notes": false},
+  {"id": 18, "question": "What is the tallest mountain on Earth above sea level?", "expected_tool": "search_web", "in_notes": false}
+]

@@ -37,6 +37,7 @@ except ImportError:  # LangChain >= 1.0
 
 import config
 from ingest import retrieve
+from websearch import web_search
 
 # Shared LLM instance. The SAME model both routes (as the agent) and generates
 # the grounded answers (inside each tool). We talk to OpenRouter through its
@@ -94,6 +95,20 @@ _NO_NOTES_MSG = (
     "I couldn't find anything relevant in your notes. "
     "Have you uploaded and ingested notes on this topic yet?"
 )
+
+# When `answer_from_notes` finds nothing, it returns THIS instead. It doubles as
+# (a) an honest message the user can read, and (b) a signal the agent's routing
+# brain reacts to: if web search is enabled, the system prompt tells the agent it
+# may now call `search_web`. Keeping it prose-y means it still reads fine even if
+# the agent decides to stop here rather than go to the web.
+def _notes_miss_msg() -> str:
+    if config.ENABLE_WEB_SEARCH:
+        return (
+            "NOTES_MISS: I couldn't find this in your uploaded notes. "
+            "If this is a general-knowledge question, the `search_web` tool can "
+            "look it up online; otherwise let the user know it isn't in their notes."
+        )
+    return _NO_NOTES_MSG
 
 
 # --- Robust argument schemas ---------------------------------------------
@@ -159,7 +174,7 @@ def answer_from_notes(query: str) -> str:
     "How does Y work?". Returns a grounded answer plus a source snippet."""
     docs = retrieve(query)
     if not docs:
-        return _NO_NOTES_MSG
+        return _notes_miss_msg()
 
     context = _format_context(docs)
     prompt = (
@@ -220,15 +235,53 @@ def explain_concept(concept: str) -> str:
     return f"{explanation}\n\n{_source_snippet(docs)}"
 
 
+@tool(args_schema=_QueryArgs)
+def search_web(query: str) -> str:
+    """Look an answer up on the public web. This is a FALLBACK, not a default:
+    use it ONLY after `answer_from_notes` reports the notes don't cover the topic
+    (a 'NOTES_MISS'), and only for general-knowledge questions. The answer comes
+    from the web, NOT the user's notes, and is clearly labelled as such."""
+    results = web_search(query)
+    if not results:
+        return (
+            "I couldn't find this in your notes, and the web-search fallback is "
+            "unavailable right now (no network, or the search backend isn't "
+            "installed). SOURCE: (web search unavailable)"
+        )
+
+    context = "\n\n".join(
+        f"[{i + 1}] {r['title']}\n{r['snippet']}\n({r['url']})"
+        for i, r in enumerate(results)
+    )
+    prompt = (
+        "You are a study assistant. The user's own notes did NOT contain the "
+        "answer, so you searched the web. Answer the question concisely using "
+        "ONLY the search results below. If they don't actually answer it, say so "
+        "honestly.\n\n"
+        f"SEARCH RESULTS:\n{context}\n\n"
+        f"QUESTION: {query}\n\nAnswer:"
+    )
+    answer = llm.invoke(prompt).content
+    top = results[0]
+    src = f"SOURCE: [web] {top['title']} — {top['url']}".strip()
+    disclaimer = "\n\n_⚠️ This came from a **web search**, not your notes._"
+    return f"{answer}{disclaimer}\n\n{src}"
+
+
 # --- Assemble the tool-calling agent -------------------------------------
 
+# `search_web` is only offered to the agent when web search is enabled — with it
+# off, the agent stays strictly notes-only and can never reach the internet.
 TOOLS = [answer_from_notes, make_quiz, explain_concept]
+if config.ENABLE_WEB_SEARCH:
+    TOOLS.append(search_web)
 
 # Human-friendly labels the UI shows while a given tool is running.
 TOOL_STATUS = {
     "answer_from_notes": "🔍 Retrieving from notes…",
     "make_quiz": "📝 Building quiz…",
     "explain_concept": "💡 Explaining concept…",
+    "search_web": "🌐 Notes came up empty — searching the web…",
 }
 
 # The system prompt is the agent's routing "brain": it tells the LLM what the
@@ -236,7 +289,7 @@ TOOL_STATUS = {
 # stores the running record of tool calls + observations during the loop.
 _SYSTEM = (
     "You are Study Companion, an agent that helps a student learn from THEIR "
-    "OWN uploaded notes. Route every message to exactly ONE of these tools:\n"
+    "OWN uploaded notes. Route each message to the right tool:\n"
     "- answer_from_notes: the DEFAULT for factual questions — 'what is', "
     "'define', 'how does', 'when', 'why', 'list'. Use this unless the user "
     "clearly wants a quiz or a simplified explanation.\n"
@@ -245,9 +298,17 @@ _SYSTEM = (
     "questions, pass it as the `n` argument (e.g. 'quiz me with 3' -> n=3).\n"
     "- explain_concept: ONLY when the user explicitly asks for a SIMPLE "
     "explanation, an analogy, or says they're confused ('explain simply', "
-    "'ELI5', 'I don't get').\n\n"
-    "Do not answer from your own general knowledge — the tools ground every "
-    "answer in the student's notes."
+    "'ELI5', 'I don't get').\n"
+    + (
+        "- search_web: a FALLBACK, not a first choice. If (and only if) "
+        "answer_from_notes comes back with a 'NOTES_MISS' — the notes don't "
+        "cover the question — AND the question is general knowledge, THEN call "
+        "search_web to look it up online. Never open with search_web; always try "
+        "the notes first.\n"
+        if config.ENABLE_WEB_SEARCH else ""
+    )
+    + "\nGround answers in the student's notes; only fall back to the web when "
+    "the notes genuinely don't contain the answer, and never invent facts."
 )
 
 prompt = ChatPromptTemplate.from_messages([

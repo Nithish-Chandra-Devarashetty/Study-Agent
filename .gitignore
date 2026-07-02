@@ -10,6 +10,8 @@ env/
 
 # Persistent vector store (regenerated from your uploads)
 chroma_db/
+# Throwaway vector store the evaluation harness ingests into
+eval/_chroma_eval/
 
 # Gradio / temp
 .gradio/

@@ -65,6 +65,15 @@ CHROMA_DIR = os.environ.get("CHROMA_DIR", "./chroma_db")
 # Name of the collection that holds all note chunks.
 COLLECTION_NAME = "study_notes"
 
+# --- Web search fallback settings ----------------------------------------
+# The agent has a `search_web` tool it can fall back to when the notes don't
+# contain the answer. It uses DuckDuckGo (free, no API key — same ethos as the
+# local embeddings), so nothing extra to configure. Set ENABLE_WEB_SEARCH=0 to
+# drop the tool entirely (e.g. for an air-gapped / notes-only demo).
+ENABLE_WEB_SEARCH = os.environ.get("ENABLE_WEB_SEARCH", "1").strip() not in ("0", "false", "False", "")
+# How many web results to pull back and summarise per fallback search.
+WEB_SEARCH_RESULTS = int(os.environ.get("WEB_SEARCH_RESULTS", "4"))
+
 # --- Retrieval / chunking settings ---------------------------------------
 # How many chunks to pull back from Chroma per query.
 TOP_K = 4
