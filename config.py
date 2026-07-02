@@ -37,7 +37,7 @@ except ImportError:
 #   qwen/qwen-2.5-72b-instruct:free
 #   mistralai/mistral-small-3.1-24b-instruct:free
 # Free models can be rate-limited or rotate over time — swap via LLM_MODEL.
-LLM_MODEL = os.environ.get("LLM_MODEL", "qwen/qwen-2.5-72b-instruct:free")
+LLM_MODEL = os.environ.get("LLM_MODEL", "poolside/laguna-m.1")
 # OpenRouter's OpenAI-compatible endpoint.
 OPENROUTER_BASE_URL = os.environ.get(
     "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
