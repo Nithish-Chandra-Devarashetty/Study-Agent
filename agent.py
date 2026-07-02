@@ -23,7 +23,7 @@ The agent loop, in plain terms:
 
 from langchain_core.tools import tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, field_validator
 
 # The classic tool-calling AgentExecutor API. In LangChain < 1.0 it lives in
@@ -39,12 +39,32 @@ import config
 from ingest import retrieve
 
 # Shared LLM instance. The SAME model both routes (as the agent) and generates
-# the grounded answers (inside each tool).
-llm = ChatOllama(
+# the grounded answers (inside each tool). We talk to OpenRouter through its
+# OpenAI-compatible API, so ChatOpenAI just needs a different base_url + key.
+# `.bind_tools()` (used by create_tool_calling_agent below) works as long as the
+# chosen OpenRouter model supports function/tool calling — see config.py.
+_openrouter_headers = {}
+if config.OPENROUTER_APP_URL:
+    _openrouter_headers["HTTP-Referer"] = config.OPENROUTER_APP_URL
+if config.OPENROUTER_APP_NAME:
+    _openrouter_headers["X-Title"] = config.OPENROUTER_APP_NAME
+
+llm = ChatOpenAI(
     model=config.LLM_MODEL,
     temperature=config.TEMPERATURE,
-    base_url=config.OLLAMA_BASE_URL,
+    api_key=config.OPENROUTER_API_KEY or "missing-key",
+    base_url=config.OPENROUTER_BASE_URL,
+    default_headers=_openrouter_headers or None,
 )
+
+
+def check_llm() -> bool:
+    """True if the OpenRouter API key is configured.
+
+    Used by the UI to show a friendly "set your API key" message instead of an
+    ugly auth error when the key is missing.
+    """
+    return config.has_llm_key()
 
 
 # --- Small helpers shared by the tools -----------------------------------

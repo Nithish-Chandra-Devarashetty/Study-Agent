@@ -1,13 +1,16 @@
-# Study Companion — dependencies (all local; no external LLM APIs)
-# Pinned to reasonably recent, compatible ranges. Tested on Python 3.10+.
+# Study Companion — dependencies
+# LLM runs on OpenRouter (remote, OpenAI-compatible API); embeddings run locally
+# via sentence-transformers. Tested on Python 3.10+.
 
 langchain>=0.3.0
 langchain-core>=0.3.0
 langchain-classic>=1.0.0       # classic AgentExecutor API (auto-installed with langchain 1.x)
 langchain-community>=0.3.0     # document loaders (PyPDFLoader, TextLoader)
-langchain-ollama>=0.2.0        # ChatOllama + OllamaEmbeddings
+langchain-openai>=0.2.0        # ChatOpenAI -> OpenRouter (OpenAI-compatible)
+langchain-huggingface>=0.1.0   # local HuggingFaceEmbeddings
+sentence-transformers>=3.0.0   # the embedding model backend (pulls torch, CPU)
 langchain-chroma>=0.1.4        # Chroma vector store integration
 chromadb>=0.5.0                # the vector store itself
 pypdf>=4.0.0                   # PDF parsing for PyPDFLoader
 gradio>=4.44.0                 # web UI
-requests>=2.31.0               # Ollama health check
+python-dotenv>=1.0.0           # load OPENROUTER_API_KEY from a local .env

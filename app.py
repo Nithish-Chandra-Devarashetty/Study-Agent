@@ -17,8 +17,8 @@ import gradio as gr
 from langchain_core.messages import HumanMessage, AIMessage
 
 import config
-from ingest import ingest_files, clear_all, check_ollama, collection_count
-from agent import build_agent, TOOL_STATUS
+from ingest import ingest_files, clear_all, collection_count
+from agent import build_agent, TOOL_STATUS, check_llm
 
 # Build the agent once at startup. Constructing it does NOT contact Ollama —
 # the connection only happens when we actually invoke it during a chat.
@@ -90,12 +90,15 @@ def agent_respond(history):
     message = history[-1]["content"]
     keep_banner = gr.update()  # leave the warm-up banner as-is on this yield
 
-    # Guard: Ollama must be running for the agent to do anything.
-    if not check_ollama():
-        err = ("⚠️ **Ollama isn't running.** Start it and pull the models:\n\n"
-               "```\nollama serve\nollama pull qwen2.5:3b\nollama pull nomic-embed-text\n```")
+    # Guard: an OpenRouter API key must be configured for the agent to work.
+    if not check_llm():
+        err = ("⚠️ **No OpenRouter API key found.** The LLM runs on OpenRouter, "
+               "so set your key and restart:\n\n"
+               "```\n# get a free key at https://openrouter.ai/keys\n"
+               "export OPENROUTER_API_KEY=sk-or-...   # PowerShell: $env:OPENROUTER_API_KEY=\"sk-or-...\"\n```\n"
+               "On Hugging Face, add it as a Space **secret** named `OPENROUTER_API_KEY`.")
         history = history + [{"role": "assistant", "content": err}]
-        yield history, "❌ Could not reach Ollama.", keep_banner
+        yield history, "❌ OPENROUTER_API_KEY is not set.", keep_banner
         return
 
     # Soft warning if there are no notes yet (tools also handle this honestly).
@@ -161,11 +164,13 @@ with gr.Blocks(title="Study Companion") as demo:
         "or ask for a simple explanation, and watch which tool the agent picks."
     )
 
-    # Warm-up notice: visible until the first response is served. On the free
-    # CPU tier, loading qwen2.5:3b into memory makes that first reply slow.
+    # Warm-up notice: visible until the first response is served. The first
+    # ingest downloads the local embedding model, and free-tier OpenRouter models
+    # can be slow/queued, so the first interaction may lag; later ones are faster.
     warmup_banner = gr.Markdown(
-        "⏳ **Warming up** — the model is loading into memory. Your **first "
-        "response may take a minute or two on CPU**; later ones are faster.",
+        "⏳ **Heads-up** — the first note ingest downloads a small embedding "
+        "model, and free-tier models can be slower on the **first response**; "
+        "later ones are faster.",
         visible=True,
     )
 
@@ -211,10 +216,10 @@ with gr.Blocks(title="Study Companion") as demo:
 
 
 if __name__ == "__main__":
-    # A quick heads-up in the console if Ollama looks down at launch.
-    if not check_ollama():
-        print("⚠️  Ollama not reachable at", config.OLLAMA_BASE_URL,
-              "\n   Start it with `ollama serve` and pull the models "
+    # A quick heads-up in the console if the API key is missing at launch.
+    if not check_llm():
+        print("⚠️  OPENROUTER_API_KEY is not set — the chat will not work.",
+              "\n   Get a free key at https://openrouter.ai/keys and set it "
               "(see README).")
     # Bind to 0.0.0.0:7860 so the app is reachable inside the Docker Space (and
     # this works unchanged locally — just open http://127.0.0.1:7860).

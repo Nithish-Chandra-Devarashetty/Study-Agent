@@ -4,8 +4,9 @@ ingest.py — the RAG *storage* layer.
 Responsibilities:
   1. Load PDF / .txt files into LangChain Documents.
   2. Split them into overlapping chunks.
-  3. Embed the chunks with nomic-embed-text (via Ollama) and store them in a
-     persistent Chroma collection.
+  3. Embed the chunks with a LOCAL sentence-transformers model and store them in
+     a persistent Chroma collection. (Embeddings run in-process — no server and
+     no API key — because OpenRouter has no embeddings endpoint.)
   4. Provide retrieval + de-duplication + "clear all" helpers used by the agent
      tools and the UI.
 
@@ -17,37 +18,28 @@ cleanly separated.
 import os
 from typing import List
 
-import requests
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_ollama import OllamaEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
 import config
 
 
-# --- Ollama helpers -------------------------------------------------------
-
-def check_ollama() -> bool:
-    """Quick health check: is the local Ollama server reachable?
-
-    Used by the UI to show a friendly "start Ollama" message instead of an
-    ugly stack trace when the server isn't running.
-    """
-    try:
-        resp = requests.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=3)
-        return resp.status_code == 200
-    except requests.RequestException:
-        return False
+# --- Embeddings -----------------------------------------------------------
+# Loading a sentence-transformers model is expensive (it reads weights off disk
+# and initialises the model), so we build it ONCE and reuse the instance for
+# every ingest and every query.
+_embeddings = None
 
 
-def get_embeddings() -> OllamaEmbeddings:
-    """The embedding model wrapper. One place to construct it."""
-    return OllamaEmbeddings(
-        model=config.EMBED_MODEL,
-        base_url=config.OLLAMA_BASE_URL,
-    )
+def get_embeddings() -> HuggingFaceEmbeddings:
+    """The embedding model wrapper (a cached local sentence-transformers model)."""
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = HuggingFaceEmbeddings(model_name=config.EMBED_MODEL)
+    return _embeddings
 
 
 def get_vectorstore() -> Chroma:
@@ -87,10 +79,6 @@ def ingest_files(paths: List[str]) -> str:
     """
     if not paths:
         return "No files selected. Please choose one or more .pdf / .txt files."
-
-    if not check_ollama():
-        return ("⚠️ Ollama isn't reachable, so embeddings can't be created.\n"
-                "Start it with `ollama serve` and make sure the models are pulled.")
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=config.CHUNK_SIZE,

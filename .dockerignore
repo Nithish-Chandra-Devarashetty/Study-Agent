@@ -10,6 +10,9 @@ __pycache__/
 chroma_db/
 chroma/
 
+# Secrets — the key is provided as a Space secret, never baked into the image
+.env
+
 # Gradio / local cruft
 .gradio/
 flagged/

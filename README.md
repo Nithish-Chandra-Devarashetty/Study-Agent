@@ -1,12 +1,22 @@
+---
+title: Study Companion
+emoji: 📖
+colorFrom: green
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 📖 Study Companion
 
-A **local LangChain agent** that answers questions, generates quizzes, and
-explains concepts — grounded in *your own* study notes. Everything runs on your
-machine against [Ollama](https://ollama.com); no OpenAI or external LLM APIs.
+A **LangChain agent** that answers questions, generates quizzes, and explains
+concepts — grounded in *your own* study notes. The LLM runs on
+[OpenRouter](https://openrouter.ai)'s free tier; embeddings run **locally** on
+your machine (no embedding API needed).
 
-The key idea: this is an **agent, not a fixed RAG chain**. The LLM (Qwen2.5:3b)
-decides *which tool* to call for each message, and the UI shows you that
-decision live.
+The key idea: this is an **agent, not a fixed RAG chain**. The LLM decides
+*which tool* to call for each message, and the UI shows you that decision live.
 
 ---
 
@@ -16,7 +26,7 @@ decision live.
 you ──▶ Gradio UI (app.py)
              │  your message
              ▼
-     Tool-calling agent (agent.py)  ◀── Qwen2.5:3b routes to ONE tool
+     Tool-calling agent (agent.py)  ◀── OpenRouter LLM routes to ONE tool
              │
    ┌─────────┼──────────────┐
    ▼         ▼              ▼
@@ -26,11 +36,15 @@ from_notes             concept
    └────── retrieve() ──────┘        (each tool does its own RAG)
              │
              ▼
-     Chroma vector store (ingest.py)  ◀── nomic-embed-text embeddings
+     Chroma vector store (ingest.py)  ◀── local sentence-transformers embeddings
              │
              ▼
      your uploaded .pdf / .txt notes
 ```
+
+**Why two different backends?** OpenRouter is a chat-completions service — it has
+no embeddings endpoint. So the LLM comes from OpenRouter, while embeddings run
+in-process with a small `sentence-transformers` model (free, no server, no key).
 
 ### The three tools
 | Tool | When the agent uses it | What it returns |
@@ -45,9 +59,9 @@ answer **only** from those chunks, so responses stay grounded in your notes.
 ### Files
 | File | Role |
 |------|------|
-| `config.py` | all settings: model names, paths, `k`, chunk size/overlap |
-| `ingest.py` | load → split → embed → persist Chroma; retrieval & de-dup |
-| `agent.py` | the three tools + the tool-calling agent loop |
+| `config.py` | all settings: model names, OpenRouter key/URL, paths, `k`, chunk size |
+| `ingest.py` | load → split → embed (local) → persist Chroma; retrieval & de-dup |
+| `agent.py` | the three tools + the tool-calling agent loop (OpenRouter LLM) |
 | `app.py` | Gradio UI (upload, chat, live agent-step display) |
 
 ---
@@ -56,21 +70,30 @@ answer **only** from those chunks, so responses stay grounded in your notes.
 
 ### 1. Install Python dependencies
 ```bash
-python -m venv venv
+python -m venv .venv
 # Windows:
-venv\Scripts\activate
+.venv\Scripts\activate
 # macOS/Linux:
-source venv/bin/activate
+source .venv/bin/activate
 
 pip install -r requirements.txt
 ```
 
-### 2. Pull the Ollama models
-Make sure Ollama is installed and running (`ollama serve`), then:
-```bash
-ollama pull qwen2.5:3b
-ollama pull nomic-embed-text
-```
+### 2. Get an OpenRouter API key
+1. Sign up at <https://openrouter.ai> and create a key at
+   <https://openrouter.ai/keys> (the free tier is enough).
+2. Make it available to the app. Either:
+   - copy `.env.example` to `.env` and paste your key in, **or**
+   - set it in your shell:
+     ```bash
+     # macOS/Linux
+     export OPENROUTER_API_KEY=sk-or-...
+     # Windows PowerShell
+     $env:OPENROUTER_API_KEY="sk-or-..."
+     ```
+
+The **first run** downloads the local embedding model (~90 MB) once; after that
+it's cached.
 
 ### 3. Run the app
 ```bash
@@ -97,9 +120,22 @@ new file **adds** to the collection. Use **🧹 Clear all notes** to start fresh
 
 ---
 
+## Choosing a model
+Set `LLM_MODEL` (env var or `.env`) to any **tool-calling-capable** OpenRouter
+model. This is a tool-calling agent, so the model *must* support function calling.
+Good free options:
+- `meta-llama/llama-3.3-70b-instruct:free` (default)
+- `qwen/qwen-2.5-72b-instruct:free`
+- `mistralai/mistral-small-3.1-24b-instruct:free`
+
+Free models can be rate-limited or rotate over time — if one stops working, swap
+in another. See the current list at <https://openrouter.ai/models?max_price=0>.
+
+---
+
 ## Error handling
-- **Ollama not running** → the app detects it and tells you to `ollama serve` +
-  pull the models, instead of crashing.
+- **Missing API key** → the app detects it and tells you to set
+  `OPENROUTER_API_KEY`, instead of crashing.
 - **No notes uploaded / nothing relevant found** → tools answer honestly rather
   than making things up.
 - **Bad / unreadable upload** → reported per-file in the ingestion status box.
@@ -107,58 +143,42 @@ new file **adds** to the collection. Use **🧹 Clear all notes** to start fresh
 ---
 
 ## Deploying to Hugging Face Spaces
-This repo ships a **Docker Space** (not the Gradio SDK) that runs **Ollama and
-both models entirely inside the container** — no external model backend. It's
-built for a demo on the **free CPU tier**: it prioritises "stands up and works"
-over speed.
-
-**What's in the box:**
-| File | Role |
-|------|------|
-| `Dockerfile` | slim Python base → installs Ollama → installs deps → runs `start.sh` |
-| `start.sh` | starts `ollama serve`, waits until it's reachable, pulls the models, launches the app |
-| `.dockerignore` | keeps the local `.venv/` and `chroma_db/` out of the image |
+This repo ships a **Docker Space**. There's no model server to install — the LLM
+is remote (OpenRouter) and the embedding model is baked into the image at build
+time — so the container just runs the Gradio app.
 
 ### Steps
 1. Create a new Space at <https://huggingface.co/new-space>.
-2. Set **SDK = Docker** (choose *Blank* / bring-your-own-Dockerfile), and pick
-   the **free CPU** hardware.
-3. Push this repo to the Space's git remote:
+2. Set **SDK = Docker** (choose *Blank* / bring-your-own-Dockerfile). The free
+   CPU tier is fine.
+3. Add your key as a **secret**: Space **Settings → Variables and secrets → New
+   secret**, name `OPENROUTER_API_KEY`, value your key. *(Optionally add
+   `LLM_MODEL` as a variable to override the model.)*
+4. Push this repo to the Space's git remote:
    ```bash
    git remote add space https://huggingface.co/spaces/<user>/<space-name>
    git push space main
    ```
    *(Or create the Space from the web UI and upload these files.)* The Space
-   builds the `Dockerfile` and runs `start.sh` as its entrypoint.
-4. Watch the build/run **Logs** tab — `start.sh` prints each step (`1/4 …` →
-   `4/4 Launching …`) so you can follow the startup and model downloads.
+   builds the `Dockerfile` and runs `python app.py`.
 
-### What to expect (CPU-tier realities)
-- **First startup is slow.** On first boot the container downloads the model
-  weights into itself — **~2GB for `qwen2.5:3b`** plus the `nomic-embed-text`
-  embedding model — before the app comes up. This is normal; the logs show the
-  pull progress.
-- **The first *request* is slow too.** The app shows a **"⏳ warming up"** banner
-  until the first response is served, because Ollama has to load the model into
-  memory on CPU. Later requests are faster. There's no GPU anywhere — this runs
-  on the free CPU tier by design.
-- **Free Spaces sleep after inactivity.** When the Space wakes, that cold first
-  request is slow again while the model reloads.
+### What to expect
+- **Build downloads the embedding model** into the image (once, at build time).
+- **The first *request* can be slow** — free-tier OpenRouter models may queue —
+  so the app shows a brief "heads-up" banner until the first response is served.
 - **Storage is ephemeral.** Chroma persists to a writable dir inside the
-  container (`CHROMA_DIR`), which resets when the Space restarts. That's fine
-  for a demo — just re-ingest your notes after a restart. The included
-  `sample_notes.txt` lets you try it immediately.
-
-> The LangChain agent, its three tools, and the model choices are **identical**
-> to the local version — only this deployment wrapper is added.
+  container (`CHROMA_DIR`), which resets when the Space restarts. That's fine for
+  a demo — re-ingest your notes after a restart. The included `sample_notes.txt`
+  lets you try it immediately.
 
 ---
 
 ## Config knobs (`config.py`)
 | Setting | Default | Meaning |
 |---------|---------|---------|
-| `LLM_MODEL` | `qwen2.5:3b` | reasoning + generation model |
-| `EMBED_MODEL` | `nomic-embed-text` | embedding model |
+| `LLM_MODEL` | `meta-llama/llama-3.3-70b-instruct:free` | OpenRouter reasoning + generation model (must support tools) |
+| `OPENROUTER_API_KEY` | *(required)* | your OpenRouter key |
+| `EMBED_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | local embedding model |
 | `TOP_K` | `4` | chunks retrieved per query |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1000` / `150` | splitter settings |
 | `CHROMA_DIR` | `./chroma_db` | where the vector store persists |
