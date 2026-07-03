@@ -42,10 +42,6 @@ you honestly that it isn't in your notes. Web-sourced answers are clearly
 labelled as **not** grounded in your notes. Set `ENABLE_WEB_SEARCH=0` to drop the
 tool entirely and keep the agent strictly notes-only.
 
-**Why two different backends?** OpenRouter is a chat-completions service — it has
-no embeddings endpoint. So the LLM comes from OpenRouter, while embeddings run
-in-process with a small `sentence-transformers` model (free, no server, no key).
-
 ### The four tools
 | Tool | When the agent uses it | What it returns |
 |------|------------------------|-----------------|
