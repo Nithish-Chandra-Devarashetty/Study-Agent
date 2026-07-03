@@ -1,14 +1,4 @@
----
-title: Study Companion
-emoji: 📖
-colorFrom: green
-colorTo: blue
-sdk: docker
-app_port: 7860
-pinned: false
----
-
-# 📖 Study Companion
+# 📖 Study Agent
 
 A **LangChain agent** that answers questions, generates quizzes, and explains
 concepts — grounded in *your own* study notes. The LLM runs on
