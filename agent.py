@@ -319,12 +319,14 @@ prompt = ChatPromptTemplate.from_messages([
 ])
 
 
-def build_agent() -> AgentExecutor:
+def build_agent(verbose: bool = True) -> AgentExecutor:
     """Construct the tool-calling agent executor.
 
     `return_intermediate_steps=True` is what lets the UI see WHICH tool ran and
     grab its source snippet. `handle_parsing_errors=True` keeps a small 3B model
-    from crashing the loop if it emits a slightly malformed tool call.
+    from crashing the loop if it emits a slightly malformed tool call. Pass
+    `verbose=False` (e.g. from the eval harness) to silence the step-by-step
+    console trace.
     """
     agent = create_tool_calling_agent(llm, TOOLS, prompt)
     return AgentExecutor(
@@ -332,6 +334,6 @@ def build_agent() -> AgentExecutor:
         tools=TOOLS,
         return_intermediate_steps=True,
         handle_parsing_errors=True,
-        verbose=True,
+        verbose=verbose,
         max_iterations=4,
     )

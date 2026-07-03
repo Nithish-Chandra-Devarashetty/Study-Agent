@@ -133,7 +133,7 @@ def main():
     print(ingest_files([EVAL_NOTES]))
     print(f"Collection holds {collection_count()} chunks.\n")
 
-    agent_executor = build_agent()
+    agent_executor = build_agent(verbose=False)
 
     rows = []
     for case in cases:
@@ -160,7 +160,7 @@ def main():
 
         mark = "OK " if routing_ok else "XX "
         traj = " -> ".join(run["tools"]) or "(no tool)"
-        print(f"[{mark}] #{case['id']:>2}  exp={case['expected']:<17} got={traj:<40} judge={label}")
+        print(f"[{mark}] #{case['id']:>2}  exp={case['expected_tool']:<17} got={traj:<40} judge={label}")
         if run["error"]:
             print(f"         error: {run['error']}")
 

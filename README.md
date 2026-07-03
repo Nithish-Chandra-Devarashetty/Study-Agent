@@ -172,15 +172,33 @@ per-case table lands in `eval/results.md`.
 
 ## Metrics & limitations
 
+Latest `python evaluate.py` run (18 cases, model `poolside/laguna-m.1`; full
+per-case breakdown in [`eval/results.md`](eval/results.md)):
+
+| Metric | Score | What it means |
+|--------|-------|---------------|
+| **Routing accuracy** | **89%** (16/18) | agent picked the right tool, including the web fallback |
+| **Groundedness** (in-notes) | **100%** (14/14) | in-notes answers were supported by the retrieved notes (LLM judge) |
+| **Honest web fallback** | **100%** (4/4) | every out-of-notes question went to the web or refused — none was fabricated from the notes |
+
 **What works well**
-- **Routing is the strong point.** With intent-heavy phrasings ("quiz me…",
-  "explain… simply") the tool descriptions + system prompt route reliably, and
-  the notes-first → web-fallback decision behaves as designed.
-- **Grounding holds** for in-notes questions: each tool answers only from
-  retrieved chunks and cites the source snippet, so the judge rarely flags
-  hallucination when the material is actually present.
-- **Honest failure.** When the notes don't cover something, the agent says so or
-  goes to the web and labels the result — it doesn't quietly make things up.
+- **Grounding is the strong point — 100%.** Every in-notes answer stayed
+  supported by the retrieved chunks; each tool answers only from what it
+  retrieved and cites the source snippet.
+- **The agentic decision holds up — 100% honest fallback.** All four
+  out-of-notes questions were tried against the notes first, correctly detected
+  as misses, and routed to `search_web` (clearly labelled as web-sourced). None
+  was answered from thin air.
+- **Intent routing is reliable** for quiz/explain phrasings ("quiz me…",
+  "explain… simply") — those 6 cases routed perfectly.
+
+**Where it slips (the 2 routing misses)**
+- Both failures are *over-eager extra tool calls*, not wrong answers: on one
+  water-cycle question the agent answered from notes **and then also** ran a web
+  search (needless), and on one "explain like I'm five" it called
+  `explain_concept` then re-queried `answer_from_notes`. The final answers were
+  still grounded — the metric penalises the messy trajectory, which is the honest
+  thing to measure.
 
 **What doesn't (known limitations)**
 - **Retrieval is plain top-k cosine** over `all-MiniLM-L6-v2` (384-dim). Fine for
